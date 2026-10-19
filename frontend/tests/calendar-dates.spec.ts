@@ -1,5 +1,26 @@
 import { expect, test, type Page } from '@playwright/test';
 
+const frenchMonths = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+/** Choisit une date dans le calendrier français (bouton « Choisir la date de … »), quel que soit le mois affiché à l’ouverture. */
+async function pickDate(page: Page, label: string, iso: string) {
+  const [year, month, day] = iso.split('-').map(Number) as [number, number, number];
+  await page.getByRole('button', { name: `Choisir la date de ${label}`, exact: true }).click();
+  const panel = page.getByRole('dialog').filter({ has: page.getByRole('grid') });
+  const target = year * 12 + month - 1;
+  for (let step = 0; step < 240; step += 1) {
+    const title = panel.locator('strong');
+    // textContent : innerText suit le text-transform CSS (titre en majuscules).
+    const current = ((await title.textContent()) ?? '').trim().toLowerCase();
+    const [name, shownYear] = current.split(' ');
+    const shown = Number(shownYear) * 12 + frenchMonths.indexOf(name!);
+    if (shown === target) break;
+    await panel.getByRole('button', { name: shown < target ? 'Mois suivant' : 'Mois précédent', exact: true }).click();
+    // Attendre le nouveau mois avant de relire le titre, sinon la boucle repart sur l’ancien.
+    await expect(title).not.toHaveText(current);
+  }
+  await panel.getByRole('button', { name: new RegExp(`^\\S+ ${day} ${frenchMonths[month - 1]} ${year}$`) }).click();
+}
+
 type Row = Record<string, unknown>;
 async function prepare(page: Page) {
   const calls: { path: string; method: string; body: Row; query: URLSearchParams }[] = [];
@@ -49,8 +70,8 @@ test('les calendriers Du et Au permettent une consultation avec date française 
   const calls = await prepare(page);
   await page.goto('/app/administration?tab=blocks');
   await page.getByLabel('Gymnase à consulter').selectOption('g');
-  await page.getByLabel('Choisir la date de Du', { exact: true }).fill('2026-10-20');
-  await page.getByLabel('Choisir la date de Au', { exact: true }).fill('2026-10-20');
+  await pickDate(page, 'Du', '2026-10-20');
+  await pickDate(page, 'Au', '2026-10-20');
   await expect(page.getByLabel('Du (Europe/Paris)', { exact: true })).toHaveValue('20/10/2026');
   await expect(page.getByLabel('Au (Europe/Paris)', { exact: true })).toHaveValue('20/10/2026');
   await page.getByLabel('Heure de Du', { exact: true }).selectOption('18');
@@ -65,9 +86,9 @@ test('les calendriers Du et Au permettent une consultation avec date française 
   await page.getByRole('button', { name: 'Ajouter une indisponibilité' }).click();
   await page.getByLabel('Motif', { exact: true }).fill('Travaux');
   await page.getByLabel('Gymnase', { exact: true }).selectOption('g');
-  await page.getByLabel('Choisir la date de Début', { exact: true }).fill('2026-10-20');
+  await pickDate(page, 'Début', '2026-10-20');
   await page.getByLabel('Heure de Début', { exact: true }).selectOption('19');
-  await page.getByLabel('Choisir la date de Fin', { exact: true }).fill('2026-10-20');
+  await pickDate(page, 'Fin', '2026-10-20');
   await page.getByLabel('Heure de Fin', { exact: true }).selectOption('21');
   await page.getByRole('button', { name: 'Créer', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Travaux' })).toBeVisible();
@@ -116,7 +137,7 @@ test('calendrier et formulaire des bornes restent utilisables de 320 à 2560 px'
     await page.getByRole('button', { name: 'Mercredi 14 octobre, 3 événements', exact: true }).click();
     await page.screenshot({path:`.cache/previews/calendar-month-${device}.png`,fullPage:true});
     await page.goto('/app/administration?tab=blocks');
-    await page.getByLabel('Choisir la date de Du', { exact: true }).fill('2026-10-20');
+    await pickDate(page, 'Du', '2026-10-20');
     await page.screenshot({path:`.cache/previews/french-dates-${device}.png`,fullPage:true});
   }
 });

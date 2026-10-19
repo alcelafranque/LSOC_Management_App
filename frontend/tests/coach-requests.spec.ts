@@ -46,13 +46,15 @@ test('un coach multiéquipes propose une séance ouverte puis l’admin accepte 
   const { mutations, asAdmin } = await prepare(page);
   await page.goto('/app/planning?semaine=2026-10-12');
   await page.getByRole('button', { name: 'Nouvel événement', exact: true }).click();
-  const team = page.getByLabel('Équipe organisatrice');
-  await expect(team.locator('option')).toHaveCount(3);
-  await team.selectOption('t2');
+  const teams = page.getByRole('group', { name: 'Équipes organisatrices', exact: true });
+  await expect(teams.getByRole('checkbox')).toHaveCount(3);
+  await teams.getByLabel('Compétition 2', { exact: true }).check();
   await page.getByLabel('Titre', { exact: true }).fill('Stage ouvert');
   await page.getByLabel('Gymnase du club', { exact: true }).selectOption('g');
-  await page.getByRole('group', { name: 'Ouvert aux inscriptions des équipes', exact: true }).getByLabel('Loisir 1', { exact: true }).check();
-  await page.getByRole('group', { name: 'Ouvert aux inscriptions des sections', exact: true }).getByLabel('Loisir', { exact: true }).check();
+  const open = page.getByRole('group', { name: 'Ouvert aux inscriptions', exact: true });
+  await open.getByLabel('Loisir', { exact: true }).check();
+  await open.getByLabel('Équipes de Loisir', { exact: true }).click();
+  await open.getByLabel('Loisir 1', { exact: true }).check();
   await page.getByRole('button', { name: 'Envoyer la demande', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('maximal');
   expect(mutations).toHaveLength(0);
@@ -85,7 +87,7 @@ test('le formulaire coach reste contenu sur téléphone, tablette et ordinateur'
     await page.setViewportSize({ width, height });
     await page.goto('/app/planning?semaine=2026-10-12');
     await page.getByRole('button', { name: 'Nouvel événement', exact: true }).click();
-    await expect(page.getByLabel('Équipe organisatrice')).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Équipes organisatrices', exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Demande ${width}px`).toBe(true);
   }
 });

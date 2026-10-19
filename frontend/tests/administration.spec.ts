@@ -1,5 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** Les équipes sont repliées sous leur section (balise details) : on la déplie. */
+async function openSection(page: Page, name: string) {
+  const section = page.locator('details.admin-section').filter({ has: page.getByRole('heading', { name, exact: true, level: 3 }) });
+  if (!(await section.evaluate((node) => (node as HTMLDetailsElement).open))) await section.locator('summary').click();
+}
+
 type Row = Record<string, unknown>;
 const admin: Row = { id: 'admin-1', first_name: 'Admin', category: 'adult', roles: ['admin'], active: true, email: 'admin@example.org', messaging_allowed: true, followed_email: true, referent_email: true, admin_email: true };
 async function prepare(page: Page) {
@@ -87,17 +93,17 @@ test('utilisateur, invitation, rôles et rattachement', async ({ page }) => {
 
 test('création des sections, équipes et gymnases, modification et suppression', async ({ page }) => {
   await prepare(page);
-  await tab(page, 'Sections');
+  await tab(page, 'Sections et équipes');
   await page.getByRole('button', { name: 'Ajouter une section' }).click();
   await page.getByLabel('Nom', { exact: true }).fill('Loisir');
   await page.getByRole('button', { name: 'Créer', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Loisir', exact: true })).toBeVisible();
-  await tab(page, 'Équipes');
-  await page.getByRole('button', { name: 'Ajouter une équipe' }).click();
+  await page.getByRole('button', { name: 'Ajouter une équipe', exact: true }).click();
   await page.getByLabel('Nom', { exact: true }).fill('Loisir A');
   await page.getByLabel('Section', { exact: true }).selectOption({ label: 'Loisir' });
   await page.getByLabel('Référent', { exact: true }).selectOption('admin-1');
   await page.getByRole('button', { name: 'Créer', exact: true }).click();
+  await openSection(page, 'Loisir');
   await expect(page.getByRole('heading', { name: 'Loisir A', exact: true })).toBeVisible();
   await tab(page, 'Gymnases');
   await page.getByRole('button', { name: 'Ajouter un gymnase' }).click();
@@ -167,7 +173,8 @@ test('création par URL et avertissement des équipes sans source', async ({ pag
   await expect(page.getByText('Aucune source FFVB créée pour l’équipe Compétition A.')).toBeVisible();
   await page.getByRole('button', { name: 'Ignorer pour Compétition A' }).click();
   await expect(page.getByText('Aucune source FFVB créée pour l’équipe Compétition A.')).toHaveCount(0);
-  await tab(page, 'Équipes');
+  await tab(page, 'Sections et équipes');
+  await openSection(page, 'Compétition');
   await page.getByRole('button', { name: 'Réactiver l’avertissement pour Compétition A' }).click();
   await expect(page.getByText('Aucune source FFVB créée pour l’équipe Compétition A.')).toBeVisible();
   await tab(page, 'FFVB');
@@ -200,9 +207,10 @@ test('administration utilisable de 320 à 2560 px sans débordement', async ({ p
   const dimensions = [[320,568],[360,800],[375,667],[390,844],[412,915],[430,932],[768,1024],[820,1180],[1024,768],[1280,720],[1366,768],[1440,900],[1920,1080],[2560,1440]];
   for (const [width, height] of dimensions) {
     await page.setViewportSize({ width: width!, height: height! });
-    for (const name of ['Utilisateurs', 'Sections', 'Équipes', 'Licences', 'Gymnases', 'Indisponibilités', 'Validations', 'FFVB', 'E-mails']) {
+    for (const name of ['Utilisateurs', 'Sections et équipes', 'Licences', 'Postes', 'Gymnases', 'Indisponibilités', 'Validations', 'FFVB', 'E-mails']) {
       await tab(page, name);
-      await expect(page.getByRole('heading', { name, exact: true }).last()).toBeVisible();
+      const heading = name === 'Postes' ? 'Postes des joueurs' : name;
+      await expect(page.getByRole('heading', { name: heading, exact: true }).last()).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${name}, ${width}px`).toBe(true);
     }
     await tab(page, 'Utilisateurs');
